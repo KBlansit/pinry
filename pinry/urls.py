@@ -4,7 +4,7 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.contrib import admin
 from django.urls import path, include
 
-from core.views import drf_router
+from core.views import drf_router, SiteSettingsView
 
 
 admin.autodiscover()
@@ -12,6 +12,7 @@ admin.autodiscover()
 
 urlpatterns = [
     # drf api
+    path('api/v2/site-settings/', SiteSettingsView.as_view(), name='site-settings'),
     path('api/v2/', include(drf_router.urls)),
     path('api-auth/', include('rest_framework.urls', namespace="rest_framework")),
 

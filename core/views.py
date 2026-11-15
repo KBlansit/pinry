@@ -3,11 +3,14 @@ from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, routers
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 from taggit.models import Tag
 
 from core import serializers as api
-from core.models import Image, Pin, Board
+from core.models import Image, Pin, Board, SiteSettings
 from core.permissions import IsOwnerOrReadOnly, OwnerOnlyIfPrivate
 from core.serializers import filter_private_pin, filter_private_board
 
@@ -75,6 +78,14 @@ class TagAutoCompleteViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             *args,
             **kwargs
         )
+
+
+class SiteSettingsView(APIView):
+    """Read-only site display settings; changed by admins in /admin/."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        return Response(api.SiteSettingsSerializer(SiteSettings.load()).data)
 
 
 drf_router = routers.DefaultRouter()

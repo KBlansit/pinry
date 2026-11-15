@@ -1,11 +1,12 @@
 <template>
   <div class="home">
     <PHeader></PHeader>
-    <Pins></Pins>
+    <Pins :show-pin-details="showPinDetails"></Pins>
   </div>
 </template>
 
 <script>
+import API from '../components/api';
 import PHeader from '../components/PHeader.vue';
 import Pins from '../components/Pins.vue';
 
@@ -14,6 +15,18 @@ export default {
   components: {
     PHeader,
     Pins,
+  },
+  data() {
+    return {
+      showPinDetails: true,
+    };
+  },
+  created() {
+    API.SiteSettings.fetch().then(
+      (siteSettings) => {
+        this.showPinDetails = !siteSettings.hide_pin_details_on_home;
+      },
+    );
   },
 };
 </script>

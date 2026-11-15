@@ -279,7 +279,23 @@ const Tag = {
   },
 };
 
+const SiteSettings = {
+  fetch() {
+    /* resolves to the site settings, or {} if they can't be loaded */
+    const url = `${API_PREFIX}site-settings/`;
+    return new Promise(
+      (resolve) => {
+        axios.get(url).then(
+          resp => resolve(resp.data),
+          () => resolve({}),
+        );
+      },
+    );
+  },
+};
+
 export default {
+  SiteSettings,
   Tag,
   Pin,
   Board,

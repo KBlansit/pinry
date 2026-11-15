@@ -35,9 +35,9 @@
                      :style="item.style"
                      class="pin-preview-image">
                 </div>
-                <div class="pin-footer">
+                <div class="pin-footer" :class="{ 'no-details': !showPinDetails }">
                   <div class="description" v-show="item.description" v-html="niceLinks(item.description)"></div>
-                  <div class="details">
+                  <div class="details" v-if="showPinDetails">
                     <div class="is-pulled-left">
                       <img class="avatar" :src="item.avatar" alt="">
                     </div>
@@ -139,6 +139,10 @@ export default {
     return initialData();
   },
   props: {
+    showPinDetails: {
+      type: Boolean,
+      default: true,
+    },
     pinFilters: {
       type: Object,
       default() {
@@ -153,6 +157,14 @@ export default {
   watch: {
     pinFilters() {
       this.reset();
+    },
+    showPinDetails() {
+      // card heights change, so re-run the masonry layout
+      this.$nextTick(() => {
+        if (typeof this.$redrawVueMasonry === 'function') {
+          this.$redrawVueMasonry();
+        }
+      });
     },
   },
   methods: {
@@ -359,6 +371,9 @@ $avatar-height: 30px;
     border-bottom: 1px solid #DDDDDD;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  &.no-details .description {
+    border-bottom: none;
   }
   .details {
     @include secondary-font;

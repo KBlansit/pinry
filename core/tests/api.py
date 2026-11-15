@@ -9,7 +9,8 @@ from rest_framework.test import APITestCase
 from taggit.models import Tag
 
 from .helpers import create_image, create_user, create_pin
-from core.models import Pin, Image, Board
+from core.models import Pin, Image, Board, SiteSettings
+from users.models import User
 
 
 def _teardown_models():
@@ -416,3 +417,48 @@ class SecurityRegressionTests(APITestCase):
         upload = SimpleUploadedFile("x.png", b"<script>alert(1)</script>")
         resp = self.client.post(reverse("image-list"), {"image": upload})
         self.assertEqual(resp.status_code, 400, resp.content)
+
+
+class SiteSettingsTests(APITestCase):
+
+    def tearDown(self):
+        SiteSettings.objects.all().delete()
+
+    def test_defaults_to_showing_pin_details(self):
+        resp = self.client.get(reverse("site-settings"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"hide_pin_details_on_home": False})
+
+    def test_reflects_admin_setting(self):
+        settings_obj = SiteSettings.load()
+        settings_obj.hide_pin_details_on_home = True
+        settings_obj.save()
+        resp = self.client.get(reverse("site-settings"))
+        self.assertEqual(resp.json(), {"hide_pin_details_on_home": True})
+
+    def test_is_read_only_over_api(self):
+        user = create_user("default")
+        self.client.login(username=user.username, password='password')
+        resp = self.client.post(
+            reverse("site-settings"), {"hide_pin_details_on_home": True}, format="json",
+        )
+        self.assertEqual(resp.status_code, 405)
+        self.assertFalse(SiteSettings.load().hide_pin_details_on_home)
+
+    def test_singleton(self):
+        SiteSettings(hide_pin_details_on_home=True).save()
+        SiteSettings(hide_pin_details_on_home=False).save()
+        self.assertEqual(SiteSettings.objects.count(), 1)
+
+    def test_superuser_can_toggle_in_admin(self):
+        admin = User.objects.create_superuser("admin", "admin@example.com", "password")
+        self.client.force_login(admin)
+        obj = SiteSettings.load()
+        url = reverse("admin:core_sitesettings_change", args=(obj.pk, ))
+        self.assertEqual(self.client.get(url).status_code, 200)
+        resp = self.client.post(url, {"hide_pin_details_on_home": "on"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(SiteSettings.load().hide_pin_details_on_home)
+        # changelist redirects straight to the single object
+        resp = self.client.get(reverse("admin:core_sitesettings_changelist"))
+        self.assertRedirects(resp, url)

@@ -160,6 +160,39 @@ class Pin(models.Model):
         return '%s - %s' % (self.submitter, self.published)
 
 
+class SiteSettings(models.Model):
+    """Site-wide display options, editable by admins in the Django admin."""
+
+    hide_pin_details_on_home = models.BooleanField(
+        default=False,
+        verbose_name="Hide pin details on home page",
+        help_text=(
+            'Hide the avatar and "Pinned by <user> \u2022 Source" line under '
+            "each pin on the main (home) page. Other pages are unaffected."
+        ),
+    )
+
+    class Meta:
+        verbose_name = "site settings"
+        verbose_name_plural = "site settings"
+
+    def __str__(self):
+        return "Site settings"
+
+    def save(self, *args, **kwargs):
+        # singleton: always store as the single row with pk=1
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 @receiver(models.signals.post_delete, sender=Pin)
 def delete_pin_images(sender, instance, **kwargs):
     try:
