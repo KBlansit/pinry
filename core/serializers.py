@@ -4,10 +4,10 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from taggit.models import Tag
 
-from core.models import Image, Board
+from core.models import Image, Board, ImageFetchError
 from core.models import Pin
 from django_images.models import Thumbnail
-from users.serializers import UserSerializer
+from users.serializers import PublicUserSerializer
 from users.models import User
 
 
@@ -58,6 +58,11 @@ class ImageSerializer(serializers.ModelSerializer):
     thumbnail = ThumbnailSerializer(read_only=True)
     square = ThumbnailSerializer(read_only=True)
 
+    def validate_image(self, value):
+        if not Image.objects._is_valid_image(value):
+            raise ValidationError("Upload a valid image.")
+        return value
+
     def create(self, validated_data):
         image = super(ImageSerializer, self).create(validated_data)
         Thumbnail.objects.get_or_create_at_sizes(image, settings.IMAGE_SIZES.keys())
@@ -101,7 +106,7 @@ class PinSerializer(serializers.HyperlinkedModelSerializer):
             "tags",
         )
 
-    submitter = UserSerializer(read_only=True)
+    submitter = PublicUserSerializer(read_only=True)
     tags = TagSerializer(
         many=True,
         source="tag_list",
@@ -115,37 +120,47 @@ class PinSerializer(serializers.HyperlinkedModelSerializer):
     )
 
     def create(self, validated_data):
-        if 'url' not in validated_data and\
-                'image_by_id' not in validated_data:
+        submitter = self.context['request'].user
+        image_by_id = validated_data.pop("image_by_id", None)
+        if image_by_id is not None:
+            # An uploaded image may only back a single pin: re-using another
+            # user's image would let them delete it (and cascade-delete the
+            # original pin). When an image is supplied, `url` is only kept as
+            # the pin's source link (fixes 500 when both are given).
+            if Pin.objects.filter(image=image_by_id).exists():
+                raise ValidationError(
+                    {"image_by_id": "this image is already used by another pin"}
+                )
+            image = image_by_id
+        elif validated_data.get('url'):
+            url = validated_data['url']
+            try:
+                image = Image.objects.create_for_url(
+                    url,
+                    validated_data.get('referer') or url,
+                )
+            except ImageFetchError as e:
+                raise ValidationError({"url": str(e)})
+            if not image:
+                raise ValidationError({"url": "invalid image content"})
+        else:
             raise ValidationError(
                 detail={
                     "url-or-image": "Either url or image_by_id is required."
                 },
             )
-
-        submitter = self.context['request'].user
-        if 'url' in validated_data and validated_data['url']:
-            url = validated_data['url']
-            image = Image.objects.create_for_url(
-                url,
-                validated_data.get('referer', url),
-            )
-            if not image:
-                raise ValidationError({"url": "invalid image content"})
-        else:
-            image = validated_data.pop("image_by_id")
         tags = validated_data.pop('tag_list', [])
         pin = Pin.objects.create(submitter=submitter, image=image, **validated_data)
         if tags:
-            pin.tags.set(*tags)
+            pin.tags.set(tags)
         return pin
 
     def update(self, instance, validated_data):
         tags = validated_data.pop('tag_list', None)
         if tags:
-            instance.tags.set(*tags)
+            instance.tags.set(tags)
         else:
-            instance.tags.set()
+            instance.tags.clear()
         # change for image-id or image is not allowed
         validated_data.pop('image_by_id', None)
         return super(PinSerializer, self).update(instance, validated_data)
@@ -187,7 +202,7 @@ class BoardSerializer(serializers.HyperlinkedModelSerializer):
             'submitter': {"view_name": "users:user-detail"},
         }
 
-    submitter = UserSerializer(read_only=True)
+    submitter = PublicUserSerializer(read_only=True)
     total_pins = serializers.SerializerMethodField(
         read_only=True,
     )
@@ -216,7 +231,10 @@ class BoardSerializer(serializers.HyperlinkedModelSerializer):
         return query.count()
 
     def get_cover(self, instance: Board) -> dict or None:
-        pin = instance.pins.first()
+        # never expose another user's private pin as a board cover
+        pin = filter_private_pin(
+            self.context['request'], instance.pins.all(),
+        ).first()
         if pin is None:
             return None
         return PinSerializer(pin, context=self.context).data

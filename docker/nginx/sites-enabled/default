@@ -11,6 +11,15 @@ server {
     add_header X-Frame-Options sameorigin always;
 
     
+    # user uploads: never let them be interpreted as HTML/scripts
+    location /static/media {
+        alias /data/static/media;
+        expires max;
+        access_log off;
+        default_type application/octet-stream;
+        add_header Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox" always;
+        add_header X-Frame-Options sameorigin always;
+    }
     location /static {
         alias /data/static;
         expires max;
@@ -20,10 +29,13 @@ server {
         alias /data/static/media;
         expires max;
         access_log off;
+        default_type application/octet-stream;
+        add_header Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox" always;
+        add_header X-Frame-Options sameorigin always;
     }
 
     location /api {
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_pass http://localhost:8000;
@@ -31,7 +43,7 @@ server {
     }
 
     location /admin {
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_pass http://localhost:8000;

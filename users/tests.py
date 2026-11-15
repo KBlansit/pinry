@@ -93,3 +93,15 @@ class ProfileViewTest(TestCase):
         response = self.client.get(f"{url}?username={self.second_user.username}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data[0]['token'], None)
+
+
+class PublicUserPrivacyTest(TestCase):
+    def setUp(self):
+        User.objects.create_user(username='jdoe', email='jdoe@example.com', password='password')
+
+    def test_public_users_does_not_expose_email(self):
+        url = drf_reverse('users:public-user-list')
+        response = self.client.get(f"{url}?username=jdoe")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('jdoe@example.com', response.content.decode())
+        self.assertNotIn('email', response.data[0])

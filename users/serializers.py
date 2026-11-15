@@ -16,9 +16,23 @@ class PublicUserSerializer(serializers.HyperlinkedModelSerializer):
         )
         extra_kwargs = {
             settings.DRF_URL_FIELD_NAME: {
-                "view_name": "public-users:user-detail",
+                "view_name": "users:public-user-detail",
             },
         }
+
+
+class PublicProfileSerializer(PublicUserSerializer):
+    """Public profile: no email; the API token is only shown to its owner."""
+    class Meta(PublicUserSerializer.Meta):
+        fields = PublicUserSerializer.Meta.fields + ('token', )
+
+    token = serializers.SerializerMethodField(read_only=True)
+
+    def get_token(self, obj: User):
+        request = self.context.get('request')
+        if request is not None and request.user == obj:
+            return create_token_if_necessary(obj).key
+        return None
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
